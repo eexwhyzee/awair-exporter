@@ -25,3 +25,12 @@ fn main() {
     println!("listening at {}:{}", opts.address, opts.port);
     println!("Awair air-data URLS: {:?}", opts.airdata_urls);
 }
+
+fn getAirData() {
+    todo!("get air data from awair local API")
+}
+
+fn generateMetrics() {
+    todo!("generate prometheus metrics from air data")
+}
+
