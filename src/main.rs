@@ -3,13 +3,18 @@ use reqwest::Error;
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use structopt::StructOpt;
+use prometheus::{Encoder, GaugeVec, Opts, TextEncoder, Registry};
+use hyper::{Body, Request, Response, Server};
+use hyper::service::make_service_fn;
+use hyper::service::service_fn;
+use std::convert::Infallible;
 
 #[derive(Debug, StructOpt)]
 #[structopt(
     name = "Awair Local API Prometheus Exporter",
     about = "A CLI tool to export sensor data from the Awair Local API to Prometheus"
 )]
-struct Opts {
+struct Options {
     #[structopt(long, short,
         help = "Listen address")]
     address: String,
@@ -27,7 +32,7 @@ struct Opts {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AirData {
     timestamp: DateTime<Utc>,
-    score: u8,
+    score: f64,
     dew_point: f64,
     temp: f64,
     humid: f64,
@@ -44,15 +49,49 @@ pub struct AirData {
 }
 
 #[tokio::main]
-async fn main() {
-    let opts = Opts::from_args();
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Set up prometheus gauges
+    let registry = Registry::new();
+    let score = GaugeVec::new(
+        Opts::new("score", "Current Awair Score")
+        .namespace("awair")
+        .subsystem("sensors"),
+        &["airdata_url"]
+    )?;
+    registry.register(Box::new(score.clone()))?;
+
+    let opts = Options::from_args();
     println!("listening at {}:{}", opts.address, opts.port);
     for url in &opts.airdata_urls {
         println!("Getting air data from {}", url);
-        let d = get_air_data(url).await;
-        println!("{:?}", d.unwrap());
-
+        let d = get_air_data(url).await?;
+        score.with_label_values(&[url]).set(d.score);
     }
+
+    // Set up HTTP server to expose metrics
+    let make_svc = make_service_fn(move |_| {
+        let registry = registry.clone();
+        async {
+            Ok::<_, Infallible>(service_fn(move |_: Request<Body>| {
+                let metric_families = registry.gather();
+                let mut buffer = vec![];
+                let encoder = TextEncoder::new();
+                encoder.encode(&metric_families, &mut buffer).unwrap();
+
+                let response = Response::builder()
+                    .status(200)
+                    .body(Body::from(buffer)).unwrap();
+
+                async { Ok::<_, Infallible>(response) }
+            }))
+        }
+    });
+
+    let addr: std::net::SocketAddr = format!("{}:{}", opts.address, opts.port).parse()?;
+    let server = Server::bind(&addr).serve(make_svc);
+
+    println!("Serving metrics on http://{addr}/metrics");
+    server.await.map_err(|e| e.into())
 }
 
 async fn get_air_data(airdata_url: &str) -> Result<AirData, Error> {
