@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+use chrono::NaiveDateTime;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -18,6 +20,25 @@ struct Opts {
         help = "List of air-data URLs exposed from the Awair Local API"
     )]
     airdata_urls: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AirData {
+    timestamp: NaiveDateTime,
+    score: u8,
+    dew_point: f64,
+    temp: f64,
+    humid: f64,
+    abs_humid: f64,
+    co2: u32,
+    co2_est: u32,
+    co2_est_baseline: u32,
+    voc: u32,
+    voc_baseline: u32,
+    voc_h2_raw: u32,
+    voc_ethanol_raw: u32,
+    pm25: u32,
+    pm10_est: u32,
 }
 
 fn main() {
