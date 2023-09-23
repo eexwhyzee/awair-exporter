@@ -1,5 +1,7 @@
+use reqwest;
+use reqwest::Error;
 use serde::{Deserialize, Serialize};
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -24,7 +26,7 @@ struct Opts {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AirData {
-    timestamp: NaiveDateTime,
+    timestamp: DateTime<Utc>,
     score: u8,
     dew_point: f64,
     temp: f64,
@@ -41,17 +43,25 @@ pub struct AirData {
     pm10_est: u32,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let opts = Opts::from_args();
     println!("listening at {}:{}", opts.address, opts.port);
-    println!("Awair air-data URLS: {:?}", opts.airdata_urls);
+    for url in &opts.airdata_urls {
+        println!("Getting air data from {}", url);
+        let d = get_air_data(url).await;
+        println!("{:?}", d.unwrap());
+
+    }
 }
 
-fn getAirData() {
-    todo!("get air data from awair local API")
+async fn get_air_data(airdata_url: &str) -> Result<AirData, Error> {
+    let res: reqwest::Response = reqwest::get(airdata_url).await?;
+    let data: AirData = res.json::<AirData>().await?;
+    Ok(data)
 }
 
-fn generateMetrics() {
+fn generate_metrics() {
     todo!("generate prometheus metrics from air data")
 }
 
