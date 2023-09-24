@@ -15,7 +15,12 @@ use warp::{http::Response, Filter};
     about = "A CLI tool to export sensor data from the Awair Local API to Prometheus"
 )]
 struct Options {
-    #[structopt(long, short, default_value = "0.0.0.0", help = " Metrics server address")]
+    #[structopt(
+        long,
+        short,
+        default_value = "0.0.0.0",
+        help = " Metrics server address"
+    )]
     address: String,
 
     #[structopt(long, short, default_value = "8000", help = "Metrics server port")]
@@ -147,12 +152,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start HTTP server
     let addr: std::net::SocketAddr = format!("{}:{}", opts.address, opts.port).parse()?;
     info!("Serving metrics on http://{addr}/metrics");
-    let (_addr, fut) = warp::serve(metrics_route)
-        .bind_with_graceful_shutdown(addr, async move {
-            tokio::signal::ctrl_c()
-                .await
-                .expect("failed to listen to shutdown signal");
-        });
+    let (_addr, fut) = warp::serve(metrics_route).bind_with_graceful_shutdown(addr, async move {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to listen to shutdown signal");
+    });
     fut.await;
     Ok(())
 }
@@ -175,7 +179,7 @@ async fn generate_metrics(airdata_urls: Vec<String>) {
                     CO2_GAUGE.with_label_values(&[url]).set(value.co2);
                     VOC_GAUGE.with_label_values(&[url]).set(value.voc);
                     PM25_GAUGE.with_label_values(&[url]).set(value.pm25);
-                },
+                }
                 Err(e) => {
                     warn!("unable to get air-data from {url}: {e}");
                 }
