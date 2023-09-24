@@ -4,11 +4,8 @@ use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use structopt::StructOpt;
 use prometheus::{Encoder, GaugeVec, Opts, TextEncoder};
-use hyper::{Body, Request, Response, Server};
-use hyper::service::make_service_fn;
-use hyper::service::service_fn;
-use std::convert::Infallible;
 use lazy_static::lazy_static;
+use warp::{Filter, http::Response};
 
 
 #[derive(Debug, StructOpt)]
@@ -71,29 +68,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Generate metrics in the background
     tokio::spawn(generate_metrics(opts.airdata_urls));
 
-    // Set up HTTP server to expose metrics
-    let make_svc = make_service_fn(move |_| {
-        async {
-            Ok::<_, Infallible>(service_fn(move |_: Request<Body>| {
-                let metric_families = prometheus::gather();
-                let mut buffer = vec![];
-                let encoder = TextEncoder::new();
-                encoder.encode(&metric_families, &mut buffer).unwrap();
+    // Set up endpoint to expose metrics
+    let metrics_route = warp::path!("metrics").map(|| {
+        let encoder = TextEncoder::new();
+        let metric_families = prometheus::gather();
+        let mut buffer = vec![];
+        encoder.encode(&metric_families, &mut buffer).unwrap();
+        let response = Response::builder()
+            .header("content-type", encoder.format_type())
+            .body(buffer)
+            .unwrap();
 
-                let response = Response::builder()
-                    .status(200)
-                    .body(Body::from(buffer)).unwrap();
-
-                async { Ok::<_, Infallible>(response) }
-            }))
-        }
+        warp::reply::with_status(response, warp::http::StatusCode::OK)
     });
 
+    // Start HTTP server
     let addr: std::net::SocketAddr = format!("{}:{}", opts.address, opts.port).parse()?;
-    let server = Server::bind(&addr).serve(make_svc);
-
     println!("Serving metrics on http://{addr}/metrics");
-    server.await.map_err(|e| e.into())
+    warp::serve(metrics_route)
+        .run(addr)
+        .await;
+    Ok(())
 }
 
 async fn get_air_data(airdata_url: &str) -> Result<AirData, Error> {
