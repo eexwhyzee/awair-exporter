@@ -1,5 +1,7 @@
 use chrono::{DateTime, Utc};
+use env_logger::Env;
 use lazy_static::lazy_static;
+use log::info;
 use prometheus::{Encoder, GaugeVec, Opts, TextEncoder};
 use reqwest;
 use reqwest::Error;
@@ -89,9 +91,12 @@ lazy_static! {
     };
     pub static ref VOC_GAUGE: GaugeVec = {
         let gauge = GaugeVec::new(
-            Opts::new("voc", "Current Volatile Organic Compound measurement in parts per billion")
-                .namespace("awair")
-                .subsystem("sensors"),
+            Opts::new(
+                "voc",
+                "Current Volatile Organic Compound measurement in parts per billion",
+            )
+            .namespace("awair")
+            .subsystem("sensors"),
             &["airdata_url"],
         )
         .unwrap();
@@ -100,9 +105,12 @@ lazy_static! {
     };
     pub static ref PM25_GAUGE: GaugeVec = {
         let gauge = GaugeVec::new(
-            Opts::new("pm25", "Current concentration of 2.5 micron particles in micrograms per meter cubed")
-                .namespace("awair")
-                .subsystem("sensors"),
+            Opts::new(
+                "pm25",
+                "Current concentration of 2.5 micron particles in micrograms per meter cubed",
+            )
+            .namespace("awair")
+            .subsystem("sensors"),
             &["airdata_url"],
         )
         .unwrap();
@@ -113,6 +121,10 @@ lazy_static! {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize logger
+    env_logger::init_from_env(Env::default().default_filter_or("info"));
+
+    // Get options from command line args
     let opts = Options::from_args();
 
     // Generate metrics in the background
@@ -134,7 +146,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start HTTP server
     let addr: std::net::SocketAddr = format!("{}:{}", opts.address, opts.port).parse()?;
-    println!("Serving metrics on http://{addr}/metrics");
+    info!("Serving metrics on http://{addr}/metrics");
     warp::serve(metrics_route).run(addr).await;
     Ok(())
 }
@@ -155,7 +167,6 @@ async fn generate_metrics(airdata_urls: Vec<String>) {
             CO2_GAUGE.with_label_values(&[url]).set(d.co2);
             VOC_GAUGE.with_label_values(&[url]).set(d.voc);
             PM25_GAUGE.with_label_values(&[url]).set(d.pm25);
-
         }
         tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
     }
