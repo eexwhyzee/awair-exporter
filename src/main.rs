@@ -15,10 +15,10 @@ use warp::{http::Response, Filter};
     about = "A CLI tool to export sensor data from the Awair Local API to Prometheus"
 )]
 struct Options {
-    #[structopt(long, short, help = "Listen address")]
+    #[structopt(long, short, default_value = "0.0.0.0", help = " Metrics server address")]
     address: String,
 
-    #[structopt(long, short, help = "Listen port")]
+    #[structopt(long, short, default_value = "8000", help = "Metrics server port")]
     port: u16,
 
     #[structopt(
