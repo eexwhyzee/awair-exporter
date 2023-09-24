@@ -48,6 +48,13 @@ pub struct AirData {
     pm25: f64,
 }
 
+impl AirData {
+    async fn new(airdata_url: &str) -> Result<AirData, Error> {
+        let res: reqwest::Response = reqwest::get(airdata_url).await?;
+        let data: AirData = res.json::<AirData>().await?;
+        Ok(data)
+    }
+}
 // Declare and initialize global metrics
 lazy_static! {
     pub static ref SCORE_GAUGE: GaugeVec = {
@@ -161,16 +168,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn get_air_data(airdata_url: &str) -> Result<AirData, Error> {
-    let res: reqwest::Response = reqwest::get(airdata_url).await?;
-    let data: AirData = res.json::<AirData>().await?;
-    Ok(data)
-}
-
 async fn generate_metrics(airdata_urls: Vec<String>) {
     loop {
         for url in &airdata_urls {
-            let d = get_air_data(url).await;
+            let d = AirData::new(url).await;
             match d {
                 Ok(value) => {
                     SCORE_GAUGE.with_label_values(&[url]).set(value.score);
