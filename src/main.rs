@@ -34,19 +34,11 @@ struct Options {
 pub struct AirData {
     timestamp: DateTime<Utc>,
     score: f64,
-    dew_point: f64,
     temp: f64,
     humid: f64,
-    abs_humid: f64,
-    co2: u32,
-    co2_est: u32,
-    co2_est_baseline: u32,
-    voc: u32,
-    voc_baseline: u32,
-    voc_h2_raw: u32,
-    voc_ethanol_raw: u32,
-    pm25: u32,
-    pm10_est: u32,
+    co2: f64,
+    voc: f64,
+    pm25: f64,
 }
 
 // Declare and initialize global metrics
@@ -54,6 +46,61 @@ lazy_static! {
     pub static ref SCORE_GAUGE: GaugeVec = {
         let gauge = GaugeVec::new(
             Opts::new("score", "Current Awair Score")
+                .namespace("awair")
+                .subsystem("sensors"),
+            &["airdata_url"],
+        )
+        .unwrap();
+        prometheus::register(Box::new(gauge.clone())).unwrap();
+        gauge
+    };
+    pub static ref TEMP_GAUGE: GaugeVec = {
+        let gauge = GaugeVec::new(
+            Opts::new("temp", "Current temperature in celcius")
+                .namespace("awair")
+                .subsystem("sensors"),
+            &["airdata_url"],
+        )
+        .unwrap();
+        prometheus::register(Box::new(gauge.clone())).unwrap();
+        gauge
+    };
+    pub static ref HUMIDITY_GAUGE: GaugeVec = {
+        let gauge = GaugeVec::new(
+            Opts::new("humidity", "Current relative humidity")
+                .namespace("awair")
+                .subsystem("sensors"),
+            &["airdata_url"],
+        )
+        .unwrap();
+        prometheus::register(Box::new(gauge.clone())).unwrap();
+        gauge
+    };
+    pub static ref CO2_GAUGE: GaugeVec = {
+        let gauge = GaugeVec::new(
+            Opts::new("co2", "Current CO2 measurement in parts per million")
+                .namespace("awair")
+                .subsystem("sensors"),
+            &["airdata_url"],
+        )
+        .unwrap();
+        prometheus::register(Box::new(gauge.clone())).unwrap();
+        gauge
+    };
+    pub static ref VOC_GAUGE: GaugeVec = {
+        let gauge = GaugeVec::new(
+            Opts::new("voc", "Current Volatile Organic Compound measurement in parts per billion")
+                .namespace("awair")
+                .subsystem("sensors"),
+            &["airdata_url"],
+        )
+        .unwrap();
+        prometheus::register(Box::new(gauge.clone())).unwrap();
+        gauge
+    };
+    pub static ref PM25_GAUGE: GaugeVec = {
+        let gauge = GaugeVec::new(
+            Opts::new("pm25", "Current concentration of 2.5 micron particles in micrograms per meter cubed")
                 .namespace("awair")
                 .subsystem("sensors"),
             &["airdata_url"],
@@ -103,6 +150,12 @@ async fn generate_metrics(airdata_urls: Vec<String>) {
         for url in &airdata_urls {
             let d = get_air_data(url).await.unwrap();
             SCORE_GAUGE.with_label_values(&[url]).set(d.score);
+            TEMP_GAUGE.with_label_values(&[url]).set(d.temp);
+            HUMIDITY_GAUGE.with_label_values(&[url]).set(d.humid);
+            CO2_GAUGE.with_label_values(&[url]).set(d.co2);
+            VOC_GAUGE.with_label_values(&[url]).set(d.voc);
+            PM25_GAUGE.with_label_values(&[url]).set(d.pm25);
+
         }
         tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
     }
