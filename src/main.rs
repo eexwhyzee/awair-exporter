@@ -3,11 +3,13 @@ use reqwest::Error;
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use structopt::StructOpt;
-use prometheus::{Encoder, GaugeVec, Opts, TextEncoder, Registry};
+use prometheus::{Encoder, GaugeVec, Opts, TextEncoder};
 use hyper::{Body, Request, Response, Server};
 use hyper::service::make_service_fn;
 use hyper::service::service_fn;
 use std::convert::Infallible;
+use lazy_static::lazy_static;
+
 
 #[derive(Debug, StructOpt)]
 #[structopt(
@@ -48,32 +50,32 @@ pub struct AirData {
     pm10_est: u32,
 }
 
+// Declare and initialize global metrics
+lazy_static! {
+    pub static ref SCORE_GAUGE: GaugeVec = {
+        let gauge = GaugeVec::new(
+            Opts::new("score", "Current Awair Score")
+            .namespace("awair")
+            .subsystem("sensors"),
+            &["airdata_url"]
+        ).unwrap();
+        prometheus::register(Box::new(gauge.clone())).unwrap();
+        gauge
+    };
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Set up prometheus gauges
-    let registry = Registry::new();
-    let score = GaugeVec::new(
-        Opts::new("score", "Current Awair Score")
-        .namespace("awair")
-        .subsystem("sensors"),
-        &["airdata_url"]
-    )?;
-    registry.register(Box::new(score.clone()))?;
-
     let opts = Options::from_args();
-    println!("listening at {}:{}", opts.address, opts.port);
-    for url in &opts.airdata_urls {
-        println!("Getting air data from {}", url);
-        let d = get_air_data(url).await?;
-        score.with_label_values(&[url]).set(d.score);
-    }
+
+    // Generate metrics in the background
+    tokio::spawn(generate_metrics(opts.airdata_urls));
 
     // Set up HTTP server to expose metrics
     let make_svc = make_service_fn(move |_| {
-        let registry = registry.clone();
         async {
             Ok::<_, Infallible>(service_fn(move |_: Request<Body>| {
-                let metric_families = registry.gather();
+                let metric_families = prometheus::gather();
                 let mut buffer = vec![];
                 let encoder = TextEncoder::new();
                 encoder.encode(&metric_families, &mut buffer).unwrap();
@@ -100,7 +102,13 @@ async fn get_air_data(airdata_url: &str) -> Result<AirData, Error> {
     Ok(data)
 }
 
-fn generate_metrics() {
-    todo!("generate prometheus metrics from air data")
+async fn generate_metrics(airdata_urls: Vec<String>) {
+    loop {
+        for url in &airdata_urls {
+            let d = get_air_data(url).await.unwrap();
+            SCORE_GAUGE.with_label_values(&[url]).set(d.score);
+        }
+        tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
+    }
 }
 
