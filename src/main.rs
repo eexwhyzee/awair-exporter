@@ -1,12 +1,11 @@
+use chrono::{DateTime, Utc};
+use lazy_static::lazy_static;
+use prometheus::{Encoder, GaugeVec, Opts, TextEncoder};
 use reqwest;
 use reqwest::Error;
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 use structopt::StructOpt;
-use prometheus::{Encoder, GaugeVec, Opts, TextEncoder};
-use lazy_static::lazy_static;
-use warp::{Filter, http::Response};
-
+use warp::{http::Response, Filter};
 
 #[derive(Debug, StructOpt)]
 #[structopt(
@@ -14,15 +13,18 @@ use warp::{Filter, http::Response};
     about = "A CLI tool to export sensor data from the Awair Local API to Prometheus"
 )]
 struct Options {
-    #[structopt(long, short,
-        help = "Listen address")]
+    #[structopt(long, short, help = "Listen address")]
     address: String,
 
-    #[structopt(long, short, 
-        help = "Listen port")]
+    #[structopt(long, short, help = "Listen port")]
     port: u16,
 
-    #[structopt(long, short = "u", required = true, takes_value = true, min_values = 1,
+    #[structopt(
+        long,
+        short = "u",
+        required = true,
+        takes_value = true,
+        min_values = 1,
         help = "List of air-data URLs exposed from the Awair Local API"
     )]
     airdata_urls: Vec<String>,
@@ -52,10 +54,11 @@ lazy_static! {
     pub static ref SCORE_GAUGE: GaugeVec = {
         let gauge = GaugeVec::new(
             Opts::new("score", "Current Awair Score")
-            .namespace("awair")
-            .subsystem("sensors"),
-            &["airdata_url"]
-        ).unwrap();
+                .namespace("awair")
+                .subsystem("sensors"),
+            &["airdata_url"],
+        )
+        .unwrap();
         prometheus::register(Box::new(gauge.clone())).unwrap();
         gauge
     };
@@ -85,9 +88,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start HTTP server
     let addr: std::net::SocketAddr = format!("{}:{}", opts.address, opts.port).parse()?;
     println!("Serving metrics on http://{addr}/metrics");
-    warp::serve(metrics_route)
-        .run(addr)
-        .await;
+    warp::serve(metrics_route).run(addr).await;
     Ok(())
 }
 
@@ -106,4 +107,3 @@ async fn generate_metrics(airdata_urls: Vec<String>) {
         tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
     }
 }
-
