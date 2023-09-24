@@ -147,7 +147,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start HTTP server
     let addr: std::net::SocketAddr = format!("{}:{}", opts.address, opts.port).parse()?;
     info!("Serving metrics on http://{addr}/metrics");
-    warp::serve(metrics_route).run(addr).await;
+    let (_addr, fut) = warp::serve(metrics_route)
+        .bind_with_graceful_shutdown(addr, async move {
+            tokio::signal::ctrl_c()
+                .await
+                .expect("failed to listen to shutdown signal");
+        });
+    fut.await;
     Ok(())
 }
 
