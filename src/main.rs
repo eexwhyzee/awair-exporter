@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use env_logger::Env;
 use lazy_static::lazy_static;
-use log::info;
+use log::{info, warn};
 use prometheus::{Encoder, GaugeVec, Opts, TextEncoder};
 use reqwest;
 use reqwest::Error;
@@ -166,13 +166,20 @@ async fn get_air_data(airdata_url: &str) -> Result<AirData, Error> {
 async fn generate_metrics(airdata_urls: Vec<String>) {
     loop {
         for url in &airdata_urls {
-            let d = get_air_data(url).await.unwrap();
-            SCORE_GAUGE.with_label_values(&[url]).set(d.score);
-            TEMP_GAUGE.with_label_values(&[url]).set(d.temp);
-            HUMIDITY_GAUGE.with_label_values(&[url]).set(d.humid);
-            CO2_GAUGE.with_label_values(&[url]).set(d.co2);
-            VOC_GAUGE.with_label_values(&[url]).set(d.voc);
-            PM25_GAUGE.with_label_values(&[url]).set(d.pm25);
+            let d = get_air_data(url).await;
+            match d {
+                Ok(value) => {
+                    SCORE_GAUGE.with_label_values(&[url]).set(value.score);
+                    TEMP_GAUGE.with_label_values(&[url]).set(value.temp);
+                    HUMIDITY_GAUGE.with_label_values(&[url]).set(value.humid);
+                    CO2_GAUGE.with_label_values(&[url]).set(value.co2);
+                    VOC_GAUGE.with_label_values(&[url]).set(value.voc);
+                    PM25_GAUGE.with_label_values(&[url]).set(value.pm25);
+                },
+                Err(e) => {
+                    warn!("unable to get air-data from {url}: {e}");
+                }
+            }
         }
         tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
     }
