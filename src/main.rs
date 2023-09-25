@@ -19,7 +19,7 @@ struct Options {
         long,
         short,
         default_value = "0.0.0.0",
-        help = " Metrics server address"
+        help = "Metrics server address"
     )]
     address: String,
 
